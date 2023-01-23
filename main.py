@@ -1,27 +1,37 @@
+import json
+import logging
+import pickle
+import re
+
+import requests
+from PIL import Image
+from PIL import ImageDraw
 from pptx import Presentation
 from pptx.util import Inches
-import os
-import json
-import requests
-import re
-from pprint import pprint
-import logging
 
 # Format the log message
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(name)s: %(message)s')
 logger = logging.getLogger('dev')
 logger.setLevel(logging.INFO)
 
-
 text = {"outline": []}
+
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer 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"
+}
+
+filename = "text.pickle"
+infile = open(filename,'rb')
+text = pickle.load(infile)
+infile.close()
+logger.debug("Read text from file")
+
 
 def initTextReq(input):
     logger.info("Requesting title, subtitle, and outline...")
     prompt = "Write a title, subtitle, and an outline for an essay about {input}."
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer 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"
-    }
+
     data = {
         "model": "text-davinci-003",
         "prompt": prompt.format(input=input),
@@ -37,18 +47,15 @@ def initTextReq(input):
         logger.error("Error: " + response.text)
         return response.json().get('choices')[0].get('text')
 
+
 def quoteReq(input):
     logger.info("Requesting quote...")
     prompt = "Find a quote about {input}."
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer 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"
-    }
     data = {
         "model": "text-davinci-003",
         "prompt": prompt.format(input=input),
         "temperature": 0,
-        "max_tokens": 50
+        "max_tokens": 40
     }
     response = requests.post("https://api.openai.com/v1/completions", headers=headers, data=json.dumps(data))
     logger.debug("Response Text: " + response.json().get('choices')[0].get('text').strip())
@@ -63,15 +70,11 @@ def quoteReq(input):
 def analogyReq(input):
     logger.info("Requesting analogy...")
     prompt = "Write an analogy about {input}."
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer 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"
-    }
     data = {
         "model": "text-davinci-003",
         "prompt": prompt.format(input=input),
         "temperature": 0,
-        "max_tokens": 25
+        "max_tokens": 40
     }
     response = requests.post("https://api.openai.com/v1/completions", headers=headers, data=json.dumps(data))
     logger.debug("Response Text: " + response.json().get('choices')[0].get('text').strip())
@@ -82,13 +85,11 @@ def analogyReq(input):
         logger.error("Error: " + response.text)
         return response.json().get('choices')[0].get('text').strip()
 
-def bulletsReq(input,topic):
+
+def bulletsReq(input, topic):
     logger.info("Requesting bullet points for " + topic + "...")
     prompt = "For a presentation about {input}, write some bullet points for a slide titled \"{topic}\""
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer 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"
-    }
+
     data = {
         "model": "text-davinci-003",
         "prompt": prompt.format(input=input, topic=topic),
@@ -137,48 +138,91 @@ def backImageReq(input):
         logger.error("Error: " + response.text)
         return response.status_code
 
-# convert pixels to inches
+
+def overlay_gradient():
+    # Open the JPG image
+    image = Image.open("image.jpg")
+
+    # Create a new image with the same size as the original image
+    gradient = Image.new("RGBA", image.size)
+
+    # Create a linear gradient
+    draw = ImageDraw.Draw(gradient)
+    draw.linear_gradient((0, 0, image.width, image.height), (255, 0, 0), (0, 0, 255), "RGBA")
+
+    # Overlay the gradient on the original image
+    result = Image.alpha_composite(image, gradient)
+
+    # Save the resulting image
+    result.save("image.jpg")
+
+
+def analyzeOutline(initText):
+    global i, j
+    title_match = re.search(r"Title: (.*?)\n", initText)
+    subtitle_match = re.search(r"Subtitle: (.*?)\n", initText)
+    outline_match = re.search(r"Outline:\n(.*)", initText, re.DOTALL)
+    text["title"] = title_match.group(1) if title_match else None
+    text["subtitle"] = subtitle_match.group(1) if subtitle_match else None
+    outline = outline_match.group(1) if outline_match else None
+    logger.debug("Title: " + text["title"])
+    logger.debug("Subtitle: " + text["subtitle"])
+    logger.debug("Outline: " + outline)
+    text["quote"] = quoteReq(input)
+    text["analogy"] = analogyReq(input)
+    logger.debug("Original Outline: " + outline)
+    # parse outline into parts
+    outlineParts = re.split(r"[IVX]+\.", outline.lstrip())
+    outlineParts[0] = outlineParts[0].lstrip()
+    logger.debug("Outline Parts: " + str(outlineParts))
+    i = -1
+    for part in outlineParts:  # Section of outline (section)
+        if part.strip():
+            text["outline"].append({})  # create dict for section
+            ++i
+            lines = re.split(r"[A-Z]\.", part)
+            logger.debug("Outline Lines: " + str(lines))
+            k = 0  # counts number of topics added
+            j = 0  # counts iterations of loop disregarding ''
+            for line in lines:
+                if line.strip():
+                    if j == 0:  # First line (name of section)
+                        text["outline"][i] = {"name": line.strip(), "topics": []}  # section
+                        j = j + 1
+                    else:  # Subsequent lines (topics)
+                        text["outline"][i]["topics"].append({"name": line.strip(), "bullets": []})  # topic
+                        bullets = bulletsReq(input, line.strip())
+                        for l, bullet in enumerate(re.split("•", bullets)):
+                            if bullet.strip():
+                                if l < len(re.split("•", bullets)) - 1 or bullet.endswith('.'):
+                                    text["outline"][i]["topics"][k]["bullets"].append(bullet.strip())
+                        k = k + 1
+                        j = j + 1
+    logger.debug("Processed Outline: " + str(text["outline"]))
+
 
 print("What should the powerpoint be about?")
 input = input("Enter your prompt: ")
-backImageReq(input)
 
-initText = initTextReq(input)
+if input != text["input"]:
+    text = {"outline": []}
+    logger.info("New Query. Requesting new image and text.")
+    backImageReq(input)
+    # overlay_gradient()
+    analyzeOutline(initTextReq(input))
+else:
+    logger.info("Same query as before. Using old image and text.")
 
-title_match = re.search(r"Title: (.*?)\n", initText)
-subtitle_match = re.search(r"Subtitle: (.*?)\n", initText)
-outline_match = re.search(r"Outline:\n(.*)", initText, re.DOTALL)
 
-text["title"] = title_match.group(1) if title_match else None
-text["subtitle"] = subtitle_match.group(1) if subtitle_match else None
-outline = outline_match.group(1) if outline_match else None
 
-logger.debug("Title: " + text["title"])
-logger.debug("Subtitle: " + text["subtitle"])
-logger.debug("Outline: " + outline)
+# save text object to file
+text["input"] = input
+filename = "text.pickle"
+outfile = open(filename,'wb')
+pickle.dump(text,outfile)
+outfile.close()
+logger.info("Encoded text to file")
 
-text["quote"] = quoteReq(input)
-text["analogy"] = analogyReq(input)
-
-logger.debug("Original Outline: " + outline)
-
-# parse outline into parts
-outlineParts = re.split(r"[IVX]+\.", outline.lstrip())
-
-outlineParts[0] = outlineParts[0].lstrip()
-logger.debug("Outline Parts: " + str(outlineParts))
-i = -1
-for part in outlineParts:
-    if part.strip():
-        text["outline"].append([])
-        ++i
-        lines = re.split(r"[A-Z]\.", part)
-        logger.debug("Outline Lines: " + str(lines))
-        for line in lines:
-            if line.strip():
-                text["outline"][i].append(line.strip())
-
-logger.debug("Processed Outline: " + str(text["outline"]))
 
 
 # create presentation
@@ -199,55 +243,46 @@ pic = slide.shapes.add_picture('image.jpg', left, top, width=pres.slide_width, h
 slide.shapes._spTree.remove(pic._element)
 slide.shapes._spTree.insert(2, pic._element)
 
-# #Change the text formatting
-# for shape in slide.shapes:
-#     if not shape.has_text_frame:
-#         continue
-#         text_frame = shape.text_frame
-#         # do things with the text frame
 
 logger.debug("Finished Title Slide")
 
-#Analogy Slide
+# Analogy Slide
 slide = pres.slides.add_slide(pres.slide_layouts[0])
 title = slide.shapes.title
+subtitle = slide.placeholders[1]
 title.text = text["analogy"]
 
 logger.debug("Finished Analogy Slide")
 
 # Iterate over the lists in the list
 
-for i, list in enumerate(text["outline"]):
-    for j, string in enumerate(list):
-        string = string.lstrip()
-        if j == 0 and len(list) > 1:
-            logger.info("Working on title slide " + str(j + 1) + "/" + str(len(list)) + " for topic " + str(i + 1) + "/" + str(len(text["outline"])))
-            slide = pres.slides.add_slide(pres.slide_layouts[0])
-            title = slide.shapes.title
-            title.text = string
-        else:
-            logger.info("Working on content slide " + str(j + 1) + "/" + str(len(list)) + " for topic " + str(i + 1) + "/" + str(len(text["outline"])))
-            req = bulletsReq(input, string).strip()
+for i, section in enumerate(text["outline"]):
+    # create title slide with name
+    slide = pres.slides.add_slide(pres.slide_layouts[0])
+    title = slide.shapes.title
+    title.text = section["name"]
+    for j, topic in enumerate(section["topics"]):
+        logger.info(
+            "Working on content slide " + str(j + 1) + "/" + str(len(section["topics"])) + " for topic " + str(i + 1) + "/" + str(
+                len(text["outline"])))
+        slide = pres.slides.add_slide(pres.slide_layouts[1])
+        title_shape = slide.shapes.title
+        body_shape = slide.shapes.placeholders[1]
+        title_shape.text = topic["name"]
+        tf = body_shape.text_frame
+        tf.text = "\n".join(topic["bullets"])
 
-            bullets = req.replace("•", "")
-            slide = pres.slides.add_slide(pres.slide_layouts[1])
-            title_shape = slide.shapes.title
-            body_shape = slide.shapes.placeholders[1]
-            title_shape.text = string
-            tf = body_shape.text_frame
-            tf.text = bullets
 
 logger.info("Finished Content Slides")
 
-#Quote Slide
+# Quote Slide
 slide = pres.slides.add_slide(pres.slide_layouts[0])
 title = slide.shapes.title
+subtitle = slide.placeholders[1]
 title.text = text["quote"]
 
 logger.info("Finished Quote Slide")
 
-
 # Save the presentation
 pres.save('test.pptx')
 logger.info("Finished Saving Presentation")
-
