@@ -1,2 +1,2 @@
 # OpenAIPowerPointGenerator
-integrates OpenAI api to generate powerpoint files 
+impkements OpenAI api to generate powerpoint files 
