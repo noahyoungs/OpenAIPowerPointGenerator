@@ -15,22 +15,22 @@ git clone https://github.com/noahyoungs/OpenAIPowerPointGenerator.git
 cd OpenAIPowerPointGenerator
 ```
 
-### 2. Create a Python 3.8 Environment
+### 2. Create a Python 3.8 Environment named `openai_ppt_generator_env`
 
-Ensure you have Python 3.8 installed. Create a virtual environment and activate it:
+Ensure you have Python 3.8 installed. Create the virtual environment named `openai_ppt_generator_env` and activate it:
 
 **For macOS and Linux:**
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv openai_ppt_generator_env
+source openai_ppt_generator_env/bin/activate
 ```
 
 **For Windows:**
 
 ```bash
-python -m venv venv
-.\venv\Scripts\activate
+python -m venv openai_ppt_generator_env
+.\openai_ppt_generator_env\Scripts\activate
 ```
 
 Once activated, install the required packages using `requirements.txt`:
