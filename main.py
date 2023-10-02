@@ -1,13 +1,19 @@
 import json
 import logging
-import pickle
 import re
-
 import requests
 from PIL import Image
 from PIL import ImageDraw
 from pptx import Presentation
 from pptx.util import Inches
+import os
+from dotenv import load_dotenv
+
+# Load .env values into environment variables
+load_dotenv()
+# Get the API key from the environment variable
+api_key = os.environ.get("API_KEY")
+
 
 # Format the log message
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(name)s: %(message)s')
@@ -18,14 +24,15 @@ text = {"outline": []}
 
 headers = {
     "Content-Type": "application/json",
-    "Authorization": "Bearer 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"
+    "Authorization": f"Bearer {api_key}"
 }
 
-filename = "text.pickle"
-infile = open(filename,'rb')
-text = pickle.load(infile)
-infile.close()
-logger.debug("Read text from file")
+# filename = "text.pickle"
+# infile = open(filename,'rb')
+# text = pickle.load(infile)
+# infile.close()
+# logger.debug("Read text from file")
+
 
 
 def initTextReq(input):
@@ -112,7 +119,7 @@ def backImageReq(input):
     # Set the headers for the request
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer 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"
+        "Authorization": f"Bearer {api_key}"
     }
 
     # Set the data for the request
@@ -201,27 +208,25 @@ def analyzeOutline(initText):
     logger.debug("Processed Outline: " + str(text["outline"]))
 
 
+
+
+
 print("What should the powerpoint be about?")
 input = input("Enter your prompt: ")
 
-if input != text["input"]:
-    text = {"outline": []}
-    logger.info("New Query. Requesting new image and text.")
-    backImageReq(input)
-    # overlay_gradient()
-    analyzeOutline(initTextReq(input))
-else:
-    logger.info("Same query as before. Using old image and text.")
+backImageReq(input)
+# overlay_gradient()
+analyzeOutline(initTextReq(input))
 
 
 
-# save text object to file
-text["input"] = input
-filename = "text.pickle"
-outfile = open(filename,'wb')
-pickle.dump(text,outfile)
-outfile.close()
-logger.info("Encoded text to file")
+# # save text object to file
+# text["input"] = input
+# filename = "text.pickle"
+# outfile = open(filename,'wb')
+# pickle.dump(text,outfile)
+# outfile.close()
+# logger.info("Encoded text to file")
 
 
 
@@ -251,6 +256,7 @@ slide = pres.slides.add_slide(pres.slide_layouts[0])
 title = slide.shapes.title
 subtitle = slide.placeholders[1]
 title.text = text["analogy"]
+
 
 logger.debug("Finished Analogy Slide")
 
@@ -284,5 +290,8 @@ title.text = text["quote"]
 logger.info("Finished Quote Slide")
 
 # Save the presentation
-pres.save('test.pptx')
-logger.info("Finished Saving Presentation")
+pres.save('presentation.pptx')
+logger.info("Finished Saving Presentation. Open presentation.pptx to view.")
+
+# open the presentation
+os.system("open presentation.pptx")
