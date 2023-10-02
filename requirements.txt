@@ -1,0 +1,10 @@
+certifi==2023.7.22
+charset-normalizer==3.3.0
+idna==3.4
+lxml==4.9.3
+Pillow==9.5.0
+python-dotenv==1.0.0
+python-pptx==0.6.22
+requests==2.31.0
+urllib3==2.0.6
+XlsxWriter==3.1.6
